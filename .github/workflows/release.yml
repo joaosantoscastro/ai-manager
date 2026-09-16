@@ -5,6 +5,11 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to build and release, e.g. v0.1.1"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -23,7 +28,26 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
+      # Runs before the checkout so a malformed tag fails with this message
+      # rather than an unresolved-ref error. The tag is read from the
+      # environment rather than interpolated into the script, so it cannot
+      # inject shell.
+      - name: Validate the tag input
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          if [[ "$TAG" != v* ]]; then
+            echo "::error::Tag must start with 'v' to match the push trigger. Got: $TAG"
+            exit 1
+          fi
+
+      # A dispatch builds the tag it is about to release, so both trigger
+      # paths produce the same artifacts from the same commit.
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - uses: actions/setup-node@v4
         with:
@@ -52,7 +76,7 @@ jobs:
   release:
     needs: build
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
 
     steps:
       - uses: actions/download-artifact@v4
@@ -63,6 +87,7 @@ jobs:
       - name: Publish the GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
           files: |
             artifacts/*.dmg
             artifacts/*.exe
