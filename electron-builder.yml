@@ -1,0 +1,73 @@
+appId: com.pluginmanager.desktop
+productName: Plugin Manager
+copyright: Plugin Manager contributors
+
+directories:
+  output: dist
+  buildResources: assets
+
+# Only the shell lives in the asar. The Next.js server and its dependencies
+# ship through extraResources instead, because `fork` cannot execute a script
+# that is inside an asar archive.
+#
+# electron-builder pulls in production dependencies by default. The shell
+# imports nothing but Electron built-ins, and the server already carries its
+# own traced copy, so bundling them again would double the download.
+files:
+  - electron/**
+  - package.json
+  - "!node_modules/**/*"
+
+extraResources:
+  - from: build/resources
+    to: .
+
+asar: true
+npmRebuild: false
+afterPack: scripts/after-pack.mjs
+
+# The app has no auto-updater, so electron-builder should not try to derive
+# update metadata from a release provider it cannot find.
+publish: null
+
+mac:
+  icon: assets/icon.icns
+  category: public.app-category.developer-tools
+  artifactName: Plugin-Manager-macos-${arch}.${ext}
+  target:
+    - target: dmg
+      arch:
+        - arm64
+        - x64
+  # Builds are unsigned and un-notarized. `after-pack.mjs` applies an ad-hoc
+  # signature, which Apple Silicon requires before an app will launch at all.
+  hardenedRuntime: false
+  gatekeeperAssess: false
+  identity: null
+
+dmg:
+  sign: false
+  contents:
+    - x: 140
+      y: 190
+      type: file
+    - x: 400
+      y: 190
+      type: link
+      path: /Applications
+
+win:
+  icon: assets/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+        - arm64
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Plugin Manager

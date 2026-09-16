@@ -1,0 +1,105 @@
+:root {
+  --background: #ffffff;
+  --surface: #ffffff;
+  --surface-subtle: #f8f9fa;
+
+  --border: #e5e7eb;
+  --border-strong: #d1d5db;
+
+  --text: #1f2328;
+  --text-secondary: #656d76;
+  --text-muted: #8b949e;
+
+  /* 5.08:1 against white text, so button labels pass WCAG AA. The brighter
+     #1f883d only reaches ~4.0:1 and was rejected for that reason. */
+  --primary: #1a7f37;
+  --success: #1a7f37;
+  --danger: #cf222e;
+  --warning: #9a6700;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+
+  --control-height: 34px;
+  --checkbox-size: 18px;
+
+  --font-size-sm: 13px;
+  --font-size-md: 14px;
+  --font-size-lg: 16px;
+
+  --header-height: 54px;
+  --content-width: 1060px;
+
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+  background: var(--background);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-md);
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+select {
+  font-family: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* Row hover, used by ResourceRow and the tools table. */
+.row-hover:hover {
+  background: var(--surface-subtle);
+}
+
+/* Toast entry. Short and small, so a result announces itself without drawing
+   the eye away from whatever the user is reading. */
+.toast-enter {
+  animation: toast-enter 140ms ease-out;
+}
+
+@keyframes toast-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+
+  .toast-enter {
+    animation: none;
+  }
+}

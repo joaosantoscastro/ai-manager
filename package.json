@@ -1,0 +1,38 @@
+{
+  "name": "plugin-manager",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Discover and control the plugins, MCP servers, tools, skills and agents active in your local Copilot setup.",
+  "author": "plugin-manager",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "desktop:build": "node scripts/build-desktop.mjs",
+    "desktop:dev": "npm run desktop:build && electron .",
+    "desktop:start": "electron .",
+    "dist": "npm run desktop:build && electron-builder --mac --win --publish never",
+    "dist:mac": "npm run desktop:build && electron-builder --mac --publish never",
+    "dist:win": "npm run desktop:build && electron-builder --win --publish never"
+  },
+  "dependencies": {
+    "gray-matter": "^4.0.3",
+    "next": "16.3.5",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "electron": "^41.7.1",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.2",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.5",
+    "typescript": "^5"
+  }
+}
