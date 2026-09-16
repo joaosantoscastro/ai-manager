@@ -23,6 +23,38 @@ export interface HttpReply {
 
 const MAX_REDIRECTS = 5;
 
+/** Headers that authenticate the caller and must never cross an origin boundary. */
+const CREDENTIAL_HEADERS = ["authorization", "cookie", "proxy-authorization"];
+
+/**
+ * Drops credential headers when a redirect leaves the origin that was asked
+ * for them.
+ *
+ * `Authorization: Bearer …` is attached for MCP servers the user has signed
+ * in to. Following a redirect with that header still set hands the token to
+ * whatever host the response names, so a compromised or hostile server could
+ * harvest it with a single `302`.
+ */
+function headersForRedirect(
+  headers: Record<string, string>,
+  from: string,
+  to: string,
+): Record<string, string> {
+  let sameOrigin: boolean;
+  try {
+    sameOrigin = new URL(from).origin === new URL(to).origin;
+  } catch {
+    sameOrigin = false;
+  }
+  if (sameOrigin) return headers;
+
+  return Object.fromEntries(
+    Object.entries(headers).filter(
+      ([name]) => !CREDENTIAL_HEADERS.includes(name.toLowerCase()),
+    ),
+  );
+}
+
 /**
  * One HTTP request, following redirects itself.
  *
@@ -53,7 +85,7 @@ export async function httpRequestFollowingRedirects(
   return httpRequestFollowingRedirects(
     nextUrl,
     preserveBody ? method : "GET",
-    headers,
+    headersForRedirect(headers, url, nextUrl),
     preserveBody ? body : undefined,
     ca,
     timeoutMs,

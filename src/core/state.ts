@@ -94,7 +94,12 @@ export async function readManagedState(): Promise<ManagedState> {
 
 /** Atomic write: write to a temp file in the same directory, then rename over the target. */
 async function writeFileAtomic(path: string, contents: string): Promise<void> {
-  await mkdir(dirname(path), { recursive: true });
+  const dir = dirname(path);
+  await mkdir(dir, { recursive: true });
+  // The directory holds OAuth tokens and snapshots of the user's config, so
+  // it must not be traversable by other accounts on the machine. `mkdir`'s
+  // mode is masked by the umask, so it is set explicitly here instead.
+  await chmod(dir, 0o700).catch(() => {});
   const tmpPath = `${path}.tmp-${process.pid}-${Date.now()}`;
   await writeFile(tmpPath, contents, "utf8");
   await rename(tmpPath, path);

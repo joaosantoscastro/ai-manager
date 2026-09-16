@@ -45,14 +45,21 @@ export type CliResult<T> = { ok: true; data: T } | { ok: false; error: string };
  * CLI explains itself there and the `execFile` message alone says only that
  * the command failed.
  */
+/** Wraps a value in single quotes for `/bin/sh`, escaping any it contains. */
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, "'\\''")}'`;
+}
+
 async function runCliText(
   args: string[],
   timeoutMs: number = CLI_TIMEOUT_MS,
 ): Promise<CliResult<string>> {
   const dir = await mkdtemp(join(tmpdir(), "ai-setup-manager-"));
   const outFile = join(dir, "out.txt");
-  const quotedArgs = args.map((a) => `'${a.replace(/'/g, "'\\''")}'`).join(" ");
-  const shellCmd = `${CLI_BIN} ${quotedArgs} > '${outFile}' 2>&1`;
+  const quotedArgs = args.map(shellQuote).join(" ");
+  // `CLI_BIN` comes from `COPILOT_CLI_BIN`, so it is quoted like every other
+  // value rather than interpolated bare into the command string.
+  const shellCmd = `${shellQuote(CLI_BIN)} ${quotedArgs} > ${shellQuote(outFile)} 2>&1`;
   try {
     await execFileAsync("/bin/sh", ["-c", shellCmd], { timeout: timeoutMs });
     return { ok: true, data: await readFile(outFile, "utf8") };

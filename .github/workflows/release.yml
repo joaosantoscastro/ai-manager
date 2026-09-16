@@ -27,7 +27,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # Electron 41.10+ requires Node >= 22.12 for its build tooling.
+          node-version: 22
           cache: npm
 
       - name: Install dependencies

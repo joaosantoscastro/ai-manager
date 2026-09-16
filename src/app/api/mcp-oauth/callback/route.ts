@@ -3,6 +3,36 @@ import { takePendingOAuth, setOAuthRecord } from "@/core/state";
 import { exchangeCodeForToken } from "@/core/mcp-oauth";
 
 /**
+ * Escapes text for an HTML text node. `error` and `error_description` arrive
+ * as query parameters, so anything unescaped here is a reflected XSS on the
+ * app's own origin — and script on that origin can drive every API route.
+ */
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/**
+ * Serializes a value for embedding inside a `<script>` block.
+ *
+ * `JSON.stringify` alone is not safe here: it leaves `<` untouched, so a
+ * string containing `</script>` closes the block and everything after it is
+ * parsed as markup. Escaping `<` as `\u003c` keeps the JSON equivalent while
+ * making that impossible. U+2028 and U+2029 are escaped too, since both are
+ * valid JSON but are line terminators in a script body.
+ */
+function toScriptJson(value: unknown): string {
+  return JSON.stringify(value)
+    .replace(/</g, "\\u003c")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+}
+
+/**
  * A tiny standalone HTML page: this response is what the OAuth redirect
  * lands the popup window on, not a page the app's own React tree ever
  * renders, so it has to fend for itself. It tells the opener whether
@@ -14,14 +44,14 @@ function popupPage(message: {
   serverKey?: string;
   error?: string;
 }): string {
-  const payload = JSON.stringify({ source: "mcp-oauth", ...message });
+  const payload = toScriptJson({ source: "mcp-oauth", ...message });
   const text = message.ok
     ? "Signed in. You can close this window."
     : `Sign-in failed: ${message.error ?? "unknown error"}`;
   return `<!doctype html>
 <html>
 <body style="font: 14px system-ui; padding: 2rem; color: #222;">
-<p>${text}</p>
+<p>${escapeHtml(text)}</p>
 <script>
   if (window.opener) {
     window.opener.postMessage(${payload}, window.location.origin);
