@@ -6,7 +6,7 @@
  * Validation failures should degrade to a warning, not a crash — see
  * `adapters/copilot/cli.ts`.
  *
- * Shapes verified against `copilot` CLI 1.0.83 on 2026-09-14:
+ * Shapes verified against Copilot CLI 1.0.83 and 1.0.85:
  *   - `copilot plugins list --json`
  *   - `copilot mcp list --json`
  *   - `copilot skill list --json`
@@ -41,14 +41,49 @@ export const pluginsListEntrySchema = z
     enabled: z.boolean().optional(),
     version: z.string().optional(),
     installedFrom: z.string().optional(),
+    marketplace: z.string().optional(),
     description: z.string().optional(),
   })
   .passthrough();
 
-export const pluginsListOutputSchema = z.object({
+const pluginsListPayloadSchema = z.object({
   plugins: z.array(pluginsListEntrySchema),
   errors: z.array(z.unknown()).optional().default([]),
 });
+
+/**
+ * Copilot CLI 1.0.85 returns a bare array of installed plugins. Earlier
+ * versions returned the canonical `{ plugins: [...] }` payload. Normalize
+ * the newer form here so downstream code keeps one stable contract.
+ */
+function normalizePluginsListOutput(input: unknown): unknown {
+  if (!Array.isArray(input)) return input;
+
+  return {
+    plugins: input.map((item) => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) {
+        return item;
+      }
+
+      const plugin = item as Record<string, unknown>;
+      const marketplace = plugin.marketplace;
+      const hasMarketplace = typeof marketplace === "string";
+      return {
+        ...plugin,
+        kind: "plugin",
+        scope: hasMarketplace ? "user" : "unknown",
+        source: hasMarketplace
+          ? `marketplace:${marketplace}`
+          : plugin.source,
+      };
+    }),
+  };
+}
+
+export const pluginsListOutputSchema = z.preprocess(
+  normalizePluginsListOutput,
+  pluginsListPayloadSchema,
+);
 
 export const mcpServerEntrySchema = z
   .object({
