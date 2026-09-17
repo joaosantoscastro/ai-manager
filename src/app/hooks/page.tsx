@@ -1,6 +1,7 @@
 "use client";
 
 import { ResourceBrowser } from "@/ui/ResourceBrowser";
+import { UploadAction } from "@/ui/UploadAction";
 
 /**
  * Copilot has no per-hook enable setting, so this app implements one: a
@@ -14,6 +15,7 @@ export default function HooksPage() {
       kinds={["hook"]}
       title="Hooks"
       subtitle="Choose which hooks run around Copilot tool calls."
+      titleAction={<UploadAction kind="hook" />}
       searchPlaceholder="Search hooks…"
       listLabel="Registered"
       filters={["hookEvent", "scope", "status"]}

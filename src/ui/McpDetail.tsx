@@ -8,6 +8,7 @@ import { useGraph } from "./useGraph";
 import { Breadcrumb } from "./Breadcrumb";
 import { DetailHeader, SubTabs } from "./DetailChrome";
 import { McpToolsTab } from "./McpToolsTab";
+import { LoadingLine } from "./Spinner";
 import { McpConfigurationTab, AboutTab } from "./DetailTabs";
 import { EmptyState } from "./EmptyState";
 
@@ -46,9 +47,7 @@ export function McpDetail({ nodeKey: targetKey }: { nodeKey: string }) {
   );
 
   if (loading) {
-    return (
-      <p style={{ color: "var(--text-secondary)", fontSize: 13 }}>Loading…</p>
-    );
+    return <LoadingLine />;
   }
 
   if (error || !node) {

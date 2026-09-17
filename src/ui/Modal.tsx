@@ -117,9 +117,8 @@ export function Modal({
         zIndex: 100,
         background: "rgba(16, 20, 24, 0.55)",
         display: "flex",
-        alignItems: "flex-start",
         justifyContent: "center",
-        padding: "10vh 24px 24px",
+        padding: 24,
         overflowY: "auto",
       }}
     >
@@ -133,6 +132,11 @@ export function Modal({
         style={{
           width: "100%",
           maxWidth: width,
+          // Centred with `margin: auto`, not `align-items: center`. An auto
+          // cross-axis margin also suppresses the default stretch, and unlike
+          // centring it never pushes the top of a tall panel out of reach
+          // above the scroll origin.
+          margin: "auto",
           background: "var(--surface)",
           border: "1px solid var(--border)",
           borderRadius: "var(--radius-md)",

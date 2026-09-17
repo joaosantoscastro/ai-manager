@@ -1,6 +1,7 @@
 "use client";
 
 import { ResourceBrowser } from "@/ui/ResourceBrowser";
+import { UploadAction } from "@/ui/UploadAction";
 
 const SCOPE_LABEL: Record<string, string> = {
   user: "User scope",
@@ -15,6 +16,7 @@ export default function SkillsPage() {
       kinds={["skill"]}
       title="Skills"
       subtitle="Manage the skills Copilot can load."
+      titleAction={<UploadAction kind="skill" />}
       searchPlaceholder="Search skills…"
       listLabel="Installed"
       filters={["scope", "status"]}

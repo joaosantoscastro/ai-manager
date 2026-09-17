@@ -13,9 +13,9 @@
  * user's real config directly, because that's what both the CLI and the
  * desktop app read.
  */
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { discoverSourceGraph } from "@/adapters/copilot";
 import {
   getPackagedNodeRuntime,
@@ -23,6 +23,7 @@ import {
   getSourceProxyBin,
   isPackaged,
 } from "./app-paths";
+import { writeFileAtomic, writeJsonAtomic } from "./atomic-write";
 import { createSnapshot } from "./snapshot";
 import {
   readManagedState,
@@ -40,9 +41,11 @@ import type {
   SourceNode,
 } from "./types";
 import { nodeKey } from "./types";
+import { parseUpload, type ExistingNames, type PendingUpload } from "./uploads";
 
-export const SETTINGS_PATH = join(homedir(), ".copilot", "settings.json");
-export const MCP_CONFIG_PATH = join(homedir(), ".copilot", "mcp-config.json");
+export const COPILOT_DIR = join(homedir(), ".copilot");
+export const SETTINGS_PATH = join(COPILOT_DIR, "settings.json");
+export const MCP_CONFIG_PATH = join(COPILOT_DIR, "mcp-config.json");
 
 /** Marks a proxied entry so a later apply recognizes it instead of re-wrapping it. */
 const PROXY_MARKER = "_aiSetupManagerProxy";
@@ -143,6 +146,14 @@ export interface EmitPlan {
   pluginFiles: Record<string, unknown>;
   /** Plugin hook files with entries spliced out or put back, path -> new full file content. */
   hookFiles: Record<string, unknown>;
+  /**
+   * Files an upload would create, absolute path -> base64 content.
+   *
+   * Separate from `pluginFiles`/`hookFiles` because those rewrite JSON that
+   * already exists, while these bring new bytes — possibly not JSON, and
+   * possibly not text — to a path that may not exist yet.
+   */
+  newFiles: Record<string, string>;
   changes: EmitChange[];
   skipped: EmitSkip[];
   /**
@@ -200,6 +211,7 @@ function setRemove(arr: string[] | undefined, value: string): string[] {
 export async function planEmit(
   source: SourceGraph,
   overrides: OverrideMap,
+  uploads: PendingUpload[] = [],
 ): Promise<EmitPlan> {
   const state = await readManagedState();
   const settings = await readJsonFile<SettingsShape>(SETTINGS_PATH, {});
@@ -337,6 +349,16 @@ export async function planEmit(
     proxyStateUpdates,
   );
 
+  // Last, so an upload merging into settings.json or mcp-config.json lands
+  // on top of whatever the overrides above already changed there.
+  const newFiles = await planUploads(
+    uploads,
+    settings,
+    mcpConfig,
+    changes,
+    skipped,
+  );
+
   return {
     settings,
     mcpConfig,
@@ -344,11 +366,137 @@ export async function planEmit(
     mcpConfigChanged: JSON.stringify(mcpConfig) !== originalMcpConfigJson,
     pluginFiles,
     hookFiles,
+    newFiles,
     changes,
     skipped,
     proxyStateUpdates,
     hookStateUpdates,
   };
+}
+
+/** Existing skill directory names, so a collision can be spotted. */
+async function listDirectoryNames(dir: string): Promise<string[]> {
+  try {
+    const entries = await readdir(dir, { withFileTypes: true });
+    return entries.filter((e) => e.isDirectory()).map((e) => e.name);
+  } catch {
+    return [];
+  }
+}
+
+/** Existing agent names, with the `.agent.md` / `.md` suffix removed. */
+async function listAgentNames(dir: string): Promise<string[]> {
+  try {
+    const entries = await readdir(dir, { withFileTypes: true });
+    return entries
+      .filter((e) => e.isFile() && /\.md$/i.test(e.name))
+      .map((e) => e.name.replace(/\.agent\.md$/i, "").replace(/\.md$/i, ""));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Turns pending uploads into file writes and config merges.
+ *
+ * Every upload is put through `parseUpload` again here. The browser ran the
+ * same function to decide what to show the user, but that answer arrived
+ * over HTTP and cannot be trusted, and the config may have moved underneath
+ * it in the meantime. This run reads the real directory listings, so its
+ * verdict is the one that counts.
+ *
+ * A rejected upload becomes an `EmitSkip` rather than an exception: one bad
+ * drop must not stop the rest of an apply.
+ */
+async function planUploads(
+  uploads: PendingUpload[],
+  settings: SettingsShape,
+  mcpConfig: McpConfigShape,
+  changes: EmitChange[],
+  skipped: EmitSkip[],
+): Promise<Record<string, string>> {
+  if (uploads.length === 0) return {};
+
+  const [skills, agents] = await Promise.all([
+    listDirectoryNames(join(COPILOT_DIR, "skills")),
+    listAgentNames(join(COPILOT_DIR, "agents")),
+  ]);
+
+  const newFiles: Record<string, string> = {};
+
+  for (const upload of uploads) {
+    // Rebuilt per upload, so two uploads in one apply cannot silently claim
+    // the same name: the first one through is already in these lists.
+    const existing: ExistingNames = {
+      skills,
+      agents,
+      mcpServers: Object.keys(mcpConfig.mcpServers ?? {}),
+      hooks: settings.hooks ?? {},
+    };
+
+    const key = `${upload.kind}:user:${upload.name}`;
+    const parsed = parseUpload(
+      upload.kind,
+      upload.name,
+      upload.files,
+      existing,
+    );
+
+    if (parsed.errors.length > 0) {
+      skipped.push({ nodeKey: key, reason: parsed.errors.join(" ") });
+      continue;
+    }
+    if (parsed.collisions.length > 0 && !upload.replace) {
+      skipped.push({
+        nodeKey: key,
+        reason: `${parsed.collisions.join(", ")} already exists and replacing it was not confirmed.`,
+      });
+      continue;
+    }
+
+    for (const [relative, contentBase64] of Object.entries(parsed.writes)) {
+      const absolute = join(COPILOT_DIR, relative);
+      newFiles[absolute] = contentBase64;
+      changes.push({
+        file: absolute,
+        description: `${parsed.collisions.length > 0 ? "Replace" : "Add"} ${upload.kind} "${parsed.name}"`,
+      });
+    }
+
+    if (upload.kind === "mcp") {
+      const servers = (mcpConfig.mcpServers ??= {});
+      for (const [name, config] of Object.entries(parsed.merge)) {
+        servers[name] = config as { tools?: string[] };
+        changes.push({
+          file: MCP_CONFIG_PATH,
+          description: `${existing.mcpServers.includes(name) ? "Replace" : "Add"} MCP server "${name}"`,
+        });
+      }
+    }
+
+    if (upload.kind === "hook") {
+      const hooks = (settings.hooks ??= {});
+      for (const [event, value] of Object.entries(parsed.merge)) {
+        const entries = value as unknown[];
+        // Appended, never replaced: an event array belongs to every hook
+        // registered on it, not just the one being uploaded.
+        hooks[event] = [...(hooks[event] ?? []), ...entries];
+        changes.push({
+          file: SETTINGS_PATH,
+          description: `Add ${entries.length} hook entr${entries.length === 1 ? "y" : "ies"} to ${event}`,
+        });
+      }
+    }
+
+    if (parsed.kind === "skill" && !skills.includes(parsed.name)) {
+      skills.push(parsed.name);
+    }
+    if (parsed.kind === "agent" && !agents.includes(parsed.name)) {
+      agents.push(parsed.name);
+    }
+  }
+
+  return newFiles;
 }
 
 /**
@@ -792,12 +940,20 @@ function control_reason(node: SourceNode): string {
     : "Not controllable.";
 }
 
+/**
+ * Writes a JSON config file without ever exposing a half-written state.
+ *
+ * The name has always promised atomicity; `core/atomic-write.ts` is what
+ * actually delivers it. A plain `writeFile` truncates the file first and
+ * fills it after, so a crash mid-write leaves the user with a truncated
+ * `settings.json` — which reads as "no plugins, no MCP servers" and
+ * silently disables their whole setup.
+ */
 async function writeJsonFileAtomic(
   path: string,
   value: unknown,
 ): Promise<void> {
-  await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, JSON.stringify(value, null, 2) + "\n", "utf8");
+  await writeJsonAtomic(path, value);
 }
 
 export interface ApplyResult {
@@ -811,14 +967,27 @@ export interface ApplyResult {
  * could change first (even if only some actually change, for a consistent
  * revert point), writes the ones that did, and returns what happened.
  */
-export async function applyEmit(overrides: OverrideMap): Promise<ApplyResult> {
+export async function applyEmit(
+  overrides: OverrideMap,
+  uploads: PendingUpload[] = [],
+): Promise<ApplyResult> {
   const source = await discoverSourceGraph();
-  const plan = await planEmit(source, overrides);
+  const plan = await planEmit(source, overrides, uploads);
 
   const pluginFilePaths = Object.keys(plan.pluginFiles);
   const hookFilePaths = Object.keys(plan.hookFiles);
+  const newFilePaths = Object.keys(plan.newFiles);
   const snapshot = await createSnapshot(
-    [SETTINGS_PATH, MCP_CONFIG_PATH, ...pluginFilePaths, ...hookFilePaths],
+    [
+      SETTINGS_PATH,
+      MCP_CONFIG_PATH,
+      ...pluginFilePaths,
+      ...hookFilePaths,
+      // Taken before the write, so replacing an existing skill or agent can
+      // still be undone from Settings. A path that does not exist yet is
+      // recorded as absent, which is what makes the revert delete it again.
+      ...newFilePaths,
+    ],
     "apply",
   );
 
@@ -831,6 +1000,11 @@ export async function applyEmit(overrides: OverrideMap): Promise<ApplyResult> {
   }
   for (const path of hookFilePaths) {
     await writeJsonFileAtomic(path, plan.hookFiles[path]);
+  }
+  for (const path of newFilePaths) {
+    // Decoded to bytes rather than text: a skill folder may carry an image,
+    // and `writeFileAtomic` creates the parent directory on the way.
+    await writeFileAtomic(path, Buffer.from(plan.newFiles[path], "base64"));
   }
 
   // Committed only now that the files are actually on disk. Doing this during

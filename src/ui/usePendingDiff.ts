@@ -36,6 +36,7 @@ export function usePendingDiff() {
   const {
     pendingCount,
     pendingOverrides,
+    pendingUploads,
     hasPending,
     clearPending,
     afterApply,
@@ -57,7 +58,10 @@ export function usePendingDiff() {
       const res = await fetch("/api/diff", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ overrides: pendingOverrides }),
+        body: JSON.stringify({
+          overrides: pendingOverrides,
+          uploads: pendingUploads,
+        }),
         cache: "no-store",
       });
       if (!res.ok) return;
@@ -69,7 +73,7 @@ export function usePendingDiff() {
     } finally {
       if (seq === requestSeq.current) setLoadingDiff(false);
     }
-  }, [pendingOverrides]);
+  }, [pendingOverrides, pendingUploads]);
 
   const apply = useCallback(async () => {
     setBusy(true);
@@ -78,7 +82,10 @@ export function usePendingDiff() {
       const res = await fetch("/api/apply", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ overrides: pendingOverrides }),
+        body: JSON.stringify({
+          overrides: pendingOverrides,
+          uploads: pendingUploads,
+        }),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? "Apply failed");
@@ -96,7 +103,7 @@ export function usePendingDiff() {
     } finally {
       setBusy(false);
     }
-  }, [pendingOverrides, afterApply]);
+  }, [pendingOverrides, pendingUploads, afterApply]);
 
   /** Throws the pending set away. Nothing was ever written, so nothing to undo. */
   const discard = useCallback(() => {

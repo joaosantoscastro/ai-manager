@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import type { DiffResponse } from "./usePendingDiff";
 import { Button } from "./Button";
 import { EmptyState } from "./EmptyState";
+import { Spinner } from "./Spinner";
 
 /** `/Users/me/.copilot/settings.json` → `~/.copilot/settings.json`. */
 export function shortenPath(path: string): string {
@@ -84,12 +85,16 @@ export function DiffView({
       {loading && count === 0 ? (
         <p
           style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
             margin: 0,
             padding: "16px 0",
             fontSize: "var(--font-size-sm)",
             color: "var(--text-secondary)",
           }}
         >
+          <Spinner size={14} label="Working out what would be written" />
           Working out what would be written…
         </p>
       ) : count === 0 ? (
@@ -236,8 +241,22 @@ export function DiffView({
               variant="primary"
               onClick={onApply}
               disabled={busy || count === 0}
+              minWidth={132}
             >
-              {busy ? "Applying…" : "Apply changes"}
+              {busy ? (
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <Spinner size={13} label="Applying" />
+                  Applying…
+                </span>
+              ) : (
+                "Apply changes"
+              )}
             </Button>
           )}
         </div>

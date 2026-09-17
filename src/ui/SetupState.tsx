@@ -17,6 +17,7 @@ import type {
 } from "@/core/types";
 import { nodeKey } from "@/core/types";
 import { resolveNodes } from "@/core/graph";
+import type { PendingUpload } from "@/core/uploads";
 
 /**
  * The single source of truth for everything the app has discovered and
@@ -65,10 +66,21 @@ export interface SetupStateValue {
   pendingCount: number;
   /** The pending set in the shape `/api/diff` and `/api/apply` expect. */
   pendingOverrides: OverrideMap;
+  /**
+   * Files waiting to be added, the second half of the pending set.
+   *
+   * Uploads cannot be expressed as an override — an override says "this
+   * existing node should be off", while an upload brings something that does
+   * not exist yet — so they travel alongside rather than inside
+   * `pendingOverrides`. Both are resolved by the same Apply.
+   */
+  pendingUploads: PendingUpload[];
   hasPending: boolean;
 
   setEnabled: (id: NodeId, enabled: boolean) => void;
   setManyEnabled: (entries: { id: NodeId; enabled: boolean }[]) => void;
+  addUploads: (uploads: PendingUpload[]) => void;
+  removeUpload: (id: string) => void;
   clearPending: () => void;
 
   /** Re-reads the graph. Cheap: served from the discovery TTL cache. */
@@ -142,6 +154,9 @@ export function SetupStateProvider({
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [pending, setPending] = useState<Record<string, boolean>>({});
+  // Held as raw bytes in memory, never written anywhere until Apply. Like
+  // every other pending change, a reload throws them away.
+  const [uploads, setUploads] = useState<PendingUpload[]>([]);
 
   // Cached `tools/list` results, keyed by MCP server node key. Reading one
   // is a disk read on the server, so it is done once per session and shared
@@ -246,7 +261,23 @@ export function SetupStateProvider({
     [applyDecisions],
   );
 
-  const clearPending = useCallback(() => setPending({}), []);
+  const addUploads = useCallback((next: PendingUpload[]) => {
+    // Replacing by id keeps a second drop of the same item from queuing it
+    // twice, and lets the modal correct an entry it already added.
+    setUploads((current) => {
+      const incoming = new Set(next.map((u) => u.id));
+      return [...current.filter((u) => !incoming.has(u.id)), ...next];
+    });
+  }, []);
+
+  const removeUpload = useCallback((id: string) => {
+    setUploads((current) => current.filter((upload) => upload.id !== id));
+  }, []);
+
+  const clearPending = useCallback(() => {
+    setPending({});
+    setUploads([]);
+  }, []);
 
   const reload = useCallback(() => fetchGraph(false), [fetchGraph]);
 
@@ -335,6 +366,10 @@ export function SetupStateProvider({
 
   const afterApply = useCallback(async () => {
     setPending({});
+    // Unlike overrides, an upload has no source state to re-anchor against:
+    // once written it is simply part of the graph, so the queue is emptied
+    // outright rather than filtered.
+    setUploads([]);
     await fetchGraph(true);
   }, [fetchGraph]);
 
@@ -346,11 +381,14 @@ export function SetupStateProvider({
       warnings: source?.warnings ?? [],
       generatedAt: source?.generatedAt ?? null,
       refreshing,
-      pendingCount: Object.keys(pending).length,
+      pendingCount: Object.keys(pending).length + uploads.length,
       pendingOverrides,
-      hasPending: Object.keys(pending).length > 0,
+      pendingUploads: uploads,
+      hasPending: Object.keys(pending).length > 0 || uploads.length > 0,
       setEnabled,
       setManyEnabled: applyDecisions,
+      addUploads,
+      removeUpload,
       clearPending,
       reload,
       refreshDiscovery,
@@ -369,8 +407,11 @@ export function SetupStateProvider({
       refreshing,
       pending,
       pendingOverrides,
+      uploads,
       setEnabled,
       applyDecisions,
+      addUploads,
+      removeUpload,
       clearPending,
       reload,
       refreshDiscovery,

@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Button } from "./Button";
+import { Spinner } from "./Spinner";
 import { DiffView } from "./DiffView";
 import { Modal } from "./Modal";
 import { RefreshIcon } from "./icons";
@@ -238,11 +239,25 @@ export function AppHeader() {
             <Button
               variant="primary"
               disabled={busy || !hasChanges}
+              minWidth={132}
               onClick={() => {
                 void handleApply();
               }}
             >
-              {busy ? "Applying…" : "Confirm & apply"}
+              {busy ? (
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <Spinner size={13} label="Applying" />
+                  Applying…
+                </span>
+              ) : (
+                "Confirm & apply"
+              )}
             </Button>
           </>
         }

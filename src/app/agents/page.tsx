@@ -1,6 +1,7 @@
 "use client";
 
 import { ResourceBrowser } from "@/ui/ResourceBrowser";
+import { UploadAction } from "@/ui/UploadAction";
 
 const SCOPE_LABEL: Record<string, string> = {
   user: "User scope",
@@ -19,6 +20,7 @@ export default function AgentsPage() {
       kinds={["agent"]}
       title="Agents"
       subtitle="View the agents available to Copilot."
+      titleAction={<UploadAction kind="agent" />}
       searchPlaceholder="Search agents…"
       listLabel="Available"
       filters={["scope"]}

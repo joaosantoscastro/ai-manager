@@ -94,12 +94,29 @@ select {
   }
 }
 
+/* Busy indicator, see ui/Spinner.tsx. */
+.spinner {
+  animation: spinner-rotate 700ms linear infinite;
+}
+
+@keyframes spinner-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     transition: none !important;
   }
 
   .toast-enter {
+    animation: none;
+  }
+
+  /* The ring stays visible and still announces itself; it just stops
+     turning. */
+  .spinner {
     animation: none;
   }
 }

@@ -8,6 +8,7 @@ import { Breadcrumb } from "./Breadcrumb";
 import { DetailHeader, SubTabs } from "./DetailChrome";
 import { AboutTab } from "./DetailTabs";
 import { ResourceList } from "./ResourceList";
+import { LoadingLine } from "./Spinner";
 import { ListHeading } from "./PageHeader";
 import { EmptyState } from "./EmptyState";
 import { UpdatePluginsButton } from "./UpdatePluginsButton";
@@ -72,9 +73,7 @@ export function PluginDetail({ name }: { name: string }) {
   }, [children]);
 
   if (loading) {
-    return (
-      <p style={{ color: "var(--text-secondary)", fontSize: 13 }}>Loading…</p>
-    );
+    return <LoadingLine />;
   }
 
   if (error || !node) {

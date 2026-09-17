@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSourceGraph } from "@/core/graph-cache";
 import { planEmit } from "@/core/emit";
 import { parseOverrideMap, type OverrideMap } from "@/core/types";
+import { parseUploadList, type PendingUpload } from "@/core/uploads";
 
 export const dynamic = "force-dynamic";
 
 /**
- * POST /api/diff — { overrides } → preview what `/api/apply` would change,
+ * POST /api/diff — { overrides, uploads } → preview what `/api/apply` would change,
  * without writing anything.
  *
  * Pending decisions live in the browser's state service, so they arrive in
@@ -17,9 +18,14 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(request: NextRequest) {
   let overrides: OverrideMap | null;
+  let uploads: PendingUpload[] | null;
   try {
-    const body = (await request.json()) as { overrides?: unknown };
+    const body = (await request.json()) as {
+      overrides?: unknown;
+      uploads?: unknown;
+    };
     overrides = parseOverrideMap(body?.overrides);
+    uploads = parseUploadList(body?.uploads);
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
@@ -29,9 +35,15 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
+  if (!uploads) {
+    return NextResponse.json(
+      { error: "uploads must be a list of { id, kind, name, files, replace }" },
+      { status: 400 },
+    );
+  }
 
   const source = await getSourceGraph();
-  const plan = await planEmit(source, overrides);
+  const plan = await planEmit(source, overrides, uploads);
   return NextResponse.json({
     changes: plan.changes,
     skipped: plan.skipped,

@@ -8,6 +8,7 @@ import { FilterSelect, type FilterOption } from "./FilterSelect";
 import { PageHeader, ControlsRow, ListHeading } from "./PageHeader";
 import { ResourceList } from "./ResourceList";
 import { EmptyState, Notice } from "./EmptyState";
+import { LoadingLine } from "./Spinner";
 
 export type BuiltInFilter = "scope" | "status" | "mcp" | "hookEvent";
 
@@ -26,6 +27,12 @@ interface ResourceBrowserProps {
   notice?: React.ReactNode;
   /** Page-level action, pushed to the right of the controls row. */
   headerAction?: React.ReactNode;
+  /**
+   * Action rendered on the title line itself. Reserved for something that
+   * acts on the page as a whole, such as adding a new item — as opposed to
+   * `headerAction`, which belongs with the controls that narrow the list.
+   */
+  titleAction?: React.ReactNode;
   empty: { title: string; lines: string[] };
 }
 
@@ -84,6 +91,7 @@ export function ResourceBrowser({
   metaFor,
   notice,
   headerAction,
+  titleAction,
   empty,
 }: ResourceBrowserProps) {
   const { data, loading, error, toggle, refresh } = useGraph({
@@ -148,7 +156,7 @@ export function ResourceBrowser({
 
   return (
     <div>
-      <PageHeader title={title} subtitle={subtitle} />
+      <PageHeader title={title} subtitle={subtitle} action={titleAction} />
 
       {notice && <Notice>{notice}</Notice>}
 
@@ -195,9 +203,7 @@ export function ResourceBrowser({
         )}
       </ControlsRow>
 
-      {loading && (
-        <p style={{ color: "var(--text-secondary)", fontSize: 13 }}>Loading…</p>
-      )}
+      {loading && <LoadingLine />}
 
       {error && (
         <EmptyState

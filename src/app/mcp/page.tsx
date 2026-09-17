@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { ResourceBrowser } from "@/ui/ResourceBrowser";
+import { UploadAction } from "@/ui/UploadAction";
 import { useSetupState } from "@/ui/SetupState";
 import { nodeKey } from "@/core/types";
 
@@ -28,6 +29,7 @@ export default function McpPage() {
       kinds={["mcp"]}
       title="MCP"
       subtitle="Manage Model Context Protocol servers."
+      titleAction={<UploadAction kind="mcp" />}
       searchPlaceholder="Search MCP servers…"
       listLabel="Configured"
       filters={["scope", "status"]}

@@ -1,23 +1,43 @@
-/** Page title + one-line explanation, e.g. "Plugins" / "Install and manage Copilot plugins." */
+/**
+ * Page title + one-line explanation, e.g. "Plugins" / "Install and manage
+ * Copilot plugins."
+ *
+ * `action` sits on the title line itself, hard right. That is reserved for a
+ * control that acts on the page as a whole — adding something new, say —
+ * which is why it is here and not in `ControlsRow`: that row is about
+ * narrowing what is already listed.
+ */
 export function PageHeader({
   title,
   subtitle,
+  action,
 }: {
   title: string;
   subtitle?: string;
+  action?: React.ReactNode;
 }) {
   return (
     <header style={{ marginBottom: 18 }}>
-      <h1
+      <div
         style={{
-          fontSize: 20,
-          fontWeight: 600,
-          margin: 0,
-          letterSpacing: -0.2,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
         }}
       >
-        {title}
-      </h1>
+        <h1
+          style={{
+            fontSize: 20,
+            fontWeight: 600,
+            margin: 0,
+            letterSpacing: -0.2,
+          }}
+        >
+          {title}
+        </h1>
+        {action}
+      </div>
       {subtitle && (
         <p
           style={{
